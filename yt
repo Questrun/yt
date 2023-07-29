@@ -1,0 +1,72 @@
+input="Linux"
+x=""
+url=""
+if [[ $1 != "" ]]; then
+x="end"
+h=${1#https://www.youtube.com/watch?v?}
+p=${1#https://www.youtube.com/playlist?list?}
+fi
+
+while [[ $input != "" ]]
+do
+if [[ $x != "" && $1 == "" ]]; then
+opt=$(echo -e "Old Search\nNew Search\nExit" | fzf)
+ case $opt in
+     Old\ Search) echo "Proceeding";;
+     New\ Search) x="";;
+     Exit) break;;
+ esac
+fi
+if [[ $x == "" ]] ; then
+read -p "Search:" input
+yy=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$input'''))")
+c=$(curl https://invidious.projectsegfau.lt/api/v1/search?q=$yy);
+#echo $c;
+f=$(echo $c | jq length );
+#echo $f;
+
+for (( i=0 ; i<$f ; i++ ))
+do
+ xx=$( echo $c | jq ".[$i].videoId,.[$i].title" )
+ xg=$(echo -e $xx)
+ x="$x\n$xg"
+done
+x="$x\nNext Page"
+fi
+if [[ $h == "" && $p == "" ]]; then
+gj=$(echo -e $x | fzf);
+##echo $gj;
+h=$(echo $gj | grep -o '"[^"]*"' | head -n 1 | tr -d '"')
+else
+h=$p
+fi
+
+#echo $p;
+case $h in
+ ??????????) url="https://www.youtube.com/watch?v=$h";;
+ *) url="https://www.youtube.com/playlist?list=$h";;
+esac
+ca=$(echo -e 'Formats\nPlay\nSong\nPodcast\nDownload' | fzf)
+case $ca in
+	Formats) yt-dlp -F https://youtu.be/$h; read -n 1 ;;
+	Play) cache=$(echo -e "Limit cache\nNoLimit" | fzf ); case $cache in
+	     Limit\ cache)nl=$(echo -e "Low quality\nCustom" | fzf ); case $nl in 
+	     	      Low\ quality)  mpv --cache-on-disk=no --cache-secs=180 --ytdl-format="worstvideo+worstaudio" $url;;
+	     	      Custom) read -p "format: " df;  mpv --cache-on-disk=no --cache-secs=180 --ytdl-format="$df" $url;;
+	     	      esac;;
+		 NoLimit) nl=$(echo -e "Low quality\nCustom" | fzf ); case $nl in 
+	      Low\ quality) mpv --cache-on-disk=no --ytdl-format="worstvideo+worstaudio" $url;;
+	      Custom) read -p "format: " df; mpv --cache-on-disk=no --ytdl-format="$df" $url;;
+	      esac;;
+	      esac;;
+	Song) mpv --no-video --cache-on-disk=no --ytdl-format="bestaudio" $url;;
+	Podcast) mpv --no-video --cache-on-disk=no --ytdl-format="bestaudio" $url;;
+	##High\ quality) mpv --cache-on-disk=no --ytdl-format="worstvideo+worstaudio" $url;;
+	Download) dd=$(echo -e "RAM\nDisk" | fzf ); read -p "Format: " df; case $dd in
+            RAM)  cd Enclosure; yt-dlp -f $df $url;;
+            Disk) cd Downloads; yt-dlp -f $df $url;;
+            esac;;
+	*) h="";;
+esac
+read -n 1 -p "Exit?" input
+done
